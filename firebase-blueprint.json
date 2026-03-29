@@ -1,0 +1,111 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID." },
+        "email": { "type": "string", "format": "email", "description": "User's email address." },
+        "displayName": { "type": "string", "description": "User's display name." },
+        "photoURL": { "type": "string", "description": "User's profile photo URL." },
+        "role": { "type": "string", "enum": ["admin", "user", "provider"], "description": "User's role." }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Service": {
+      "title": "Service",
+      "description": "Available services offered on the platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique service ID." },
+        "name": { "type": "string", "description": "Service name." },
+        "description": { "type": "string", "description": "Service description." },
+        "price": { "type": "number", "description": "Service price." },
+        "category": { "type": "string", "description": "Service category." },
+        "imageUrl": { "type": "string", "description": "Service image URL." },
+        "rating": { "type": "number", "description": "Average rating." },
+        "reviewsCount": { "type": "number", "description": "Number of reviews." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp." }
+      },
+      "required": ["name", "price", "category"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Service orders placed by users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique order ID." },
+        "userId": { "type": "string", "description": "ID of the user who placed the order." },
+        "serviceId": { "type": "string", "description": "ID of the service ordered." },
+        "providerId": { "type": "string", "description": "ID of the service provider assigned to the order." },
+        "status": { "type": "string", "enum": ["pending", "in-progress", "completed", "rejected"], "description": "Current status of the order." },
+        "totalAmount": { "type": "number", "description": "Total amount for the order." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Order creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Order last update timestamp." }
+      },
+      "required": ["userId", "serviceId", "status", "createdAt"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Active projects associated with orders.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique project ID." },
+        "orderId": { "type": "string", "description": "ID of the associated order." },
+        "status": { "type": "string", "enum": ["active", "completed", "paused"], "description": "Current project status." },
+        "files": { "type": "array", "items": { "type": "string" }, "description": "List of associated file URLs." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Project last update timestamp." }
+      },
+      "required": ["orderId", "status"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "User notifications.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique notification ID." },
+        "userId": { "type": "string", "description": "Recipient user ID." },
+        "message": { "type": "string", "description": "Notification message." },
+        "type": { "type": "string", "description": "Notification type (e.g., order_update, new_order)." },
+        "read": { "type": "boolean", "description": "Whether the notification has been read." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Notification creation timestamp." }
+      },
+      "required": ["userId", "message", "read", "createdAt"]
+    },
+    "Review": {
+      "title": "Review",
+      "description": "User reviews for services.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique review ID." },
+        "serviceId": { "type": "string", "description": "ID of the service being reviewed." },
+        "userId": { "type": "string", "description": "ID of the user who wrote the review." },
+        "userName": { "type": "string", "description": "Name of the reviewer." },
+        "rating": { "type": "number", "description": "Rating from 1 to 5." },
+        "comment": { "type": "string", "description": "Review text content." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Review creation timestamp." }
+      },
+      "required": ["serviceId", "userId", "rating", "createdAt"]
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Service categories.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique category ID." },
+        "name": { "type": "string", "description": "Category name." }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "User profile documents." },
+    "/services/{serviceId}": { "schema": "Service", "description": "Service catalog documents." },
+    "/orders/{orderId}": { "schema": "Order", "description": "Order documents." },
+    "/projects/{projectId}": { "schema": "Project", "description": "Project documents." },
+    "/notifications/{notificationId}": { "schema": "Notification", "description": "Notification documents." },
+    "/reviews/{reviewId}": { "schema": "Review", "description": "Service review documents." },
+    "/categories/{categoryId}": { "schema": "Category", "description": "Service category documents." }
+  }
+}

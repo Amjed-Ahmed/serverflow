@@ -1,0 +1,243 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: userId (uid)
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required, format: email)
+    //   - displayName: string (optional)
+    //   - photoURL: string (optional)
+    //   - role: string (required, enum: ["admin", "user"])
+    //
+    // Collection: services
+    // Document ID: serviceId
+    // Fields:
+    //   - id: string (optional)
+    //   - name: string (required)
+    //   - description: string (optional)
+    //   - price: number (required, positive)
+    //   - category: string (required)
+    //   - imageUrl: string (optional, format: url)
+    //   - rating: number (optional)
+    //   - reviewsCount: number (optional)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: orders
+    // Document ID: orderId
+    // Fields:
+    //   - id: string (optional)
+    //   - userId: string (required)
+    //   - serviceId: string (required)
+    //   - status: string (required, enum: ["pending", "in-progress", "completed", "rejected"])
+    //   - totalAmount: number (optional)
+    //   - createdAt: timestamp (required)
+    //   - updatedAt: timestamp (optional)
+    //
+    // Collection: projects
+    // Document ID: projectId
+    // Fields:
+    //   - id: string (optional)
+    //   - orderId: string (required)
+    //   - status: string (required, enum: ["active", "completed", "paused"])
+    //   - files: list (optional)
+    //   - updatedAt: timestamp (optional)
+    //
+    // Collection: notifications
+    // Document ID: notificationId
+    // Fields:
+    //   - id: string (optional)
+    //   - userId: string (required)
+    //   - message: string (required)
+    //   - type: string (optional)
+    //   - read: bool (required)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: reviews
+    // Document ID: reviewId
+    // Fields:
+    //   - id: string (optional)
+    //   - serviceId: string (required)
+    //   - userId: string (required)
+    //   - userName: string (optional)
+    //   - rating: number (required, 1-5)
+    //   - comment: string (optional)
+    //   - createdAt: timestamp (required)
+    //
+    // Collection: categories
+    // Document ID: categoryId
+    // Fields:
+    //   - id: string (optional)
+    //   - name: string (required)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "amjed783310042@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isProvider() {
+      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'provider';
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUrl(url) {
+      return url is string &&
+        (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email', 'role']) &&
+        hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role']) &&
+        data.uid == request.auth.uid &&
+        isValidEmail(data.email) &&
+        data.role in ['admin', 'user', 'provider'] &&
+        (data.displayName == null || (data.displayName is string && data.displayName.size() < 100)) &&
+        (data.photoURL == null || isValidUrl(data.photoURL));
+    }
+
+    function isValidService(data) {
+      return hasRequiredFields(['name', 'price', 'category']) &&
+        hasOnlyAllowedFields(['id', 'name', 'description', 'price', 'category', 'imageUrl', 'rating', 'reviewsCount', 'createdAt']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+        data.price is number && data.price >= 0 &&
+        data.category is string &&
+        (data.description == null || (data.description is string && data.description.size() < 1000)) &&
+        (data.imageUrl == null || isValidUrl(data.imageUrl)) &&
+        (data.rating == null || (data.rating is number && data.rating >= 0 && data.rating <= 5)) &&
+        (data.reviewsCount == null || (data.reviewsCount is number && data.reviewsCount >= 0)) &&
+        (data.createdAt == null || data.createdAt is timestamp);
+    }
+
+    function isValidOrder(data) {
+      return hasRequiredFields(['userId', 'serviceId', 'status', 'createdAt']) &&
+        hasOnlyAllowedFields(['id', 'userId', 'serviceId', 'providerId', 'status', 'totalAmount', 'createdAt', 'updatedAt']) &&
+        (data.userId == request.auth.uid || isAdmin()) &&
+        data.status in ['pending', 'in-progress', 'completed', 'rejected'] &&
+        data.createdAt is timestamp &&
+        (data.totalAmount == null || (data.totalAmount is number && data.totalAmount >= 0)) &&
+        (data.providerId == null || data.providerId is string);
+    }
+
+    function isValidProject(data) {
+      return hasRequiredFields(['orderId', 'status']) &&
+        hasOnlyAllowedFields(['id', 'orderId', 'status', 'files', 'updatedAt']) &&
+        data.status in ['active', 'completed', 'paused'] &&
+        (data.files == null || data.files is list);
+    }
+
+    function isValidNotification(data) {
+      return hasRequiredFields(['userId', 'message', 'read', 'createdAt']) &&
+        hasOnlyAllowedFields(['id', 'userId', 'message', 'type', 'read', 'createdAt']) &&
+        data.userId is string &&
+        data.message is string && data.message.size() > 0 &&
+        data.read is bool &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidReview(data) {
+      return hasRequiredFields(['serviceId', 'userId', 'rating', 'createdAt']) &&
+        hasOnlyAllowedFields(['id', 'serviceId', 'userId', 'userName', 'rating', 'comment', 'createdAt']) &&
+        data.userId == request.auth.uid &&
+        data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+        (data.comment == null || (data.comment is string && data.comment.size() < 500)) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidCategory(data) {
+      return hasRequiredFields(['name']) &&
+        hasOnlyAllowedFields(['id', 'name']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() < 50;
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == 'user' || isAdmin());
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && (request.resource.data.role == resource.data.role || isAdmin());
+    }
+
+    match /services/{serviceId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidService(request.resource.data);
+    }
+
+    match /orders/{orderId} {
+      allow read: if isDocOwner() || isAdmin() || (isProvider() && resource.data.providerId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidOrder(request.resource.data);
+      allow update: if isAdmin() || 
+                    (isProvider() && resource.data.providerId == request.auth.uid && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])) ||
+                    (isDocOwner() && isValidOrder(request.resource.data) && request.resource.data.status == resource.data.status);
+    }
+
+    match /projects/{projectId} {
+      allow read: if isAdmin() || (isAuthenticated() && get(/databases/$(database)/documents/orders/$(resource.data.orderId)).data.userId == request.auth.uid);
+      allow write: if isAdmin() && isValidProject(request.resource.data);
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isDocOwner();
+      allow update: if isDocOwner() && hasOnlyAllowedFields(['read']) && request.resource.data.read is bool;
+      allow create: if isAdmin();
+      allow delete: if isDocOwner();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidReview(request.resource.data);
+      allow update, delete: if isAdmin() || (isDocOwner() && isValidReview(request.resource.data));
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidCategory(request.resource.data);
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}
